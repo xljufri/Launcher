@@ -4,9 +4,10 @@ import {
   Image as ImageIcon, Music, FileText, Calendar, 
   Settings, CloudRain, Map, Clock, Wifi, Battery,
   Bell, Grid, ChevronDown, ChevronUp, SlidersHorizontal, X,
-  Smartphone, Palette, Sparkles, LayoutTemplate, Crown, Type
+  Smartphone, Palette, Sparkles, LayoutTemplate, Crown, Type, ImagePlus
 } from 'lucide-react';
 import { motion, AnimatePresence, PanInfo } from 'motion/react';
+import { generateWallpaper } from './services/aiWallpaper';
 
 const AppIcon = ({ icon: Icon, label, onClick, animation }: { icon: any, label: string, onClick?: () => void, animation: string }) => {
   const getHoverAnimation = () => {
@@ -45,6 +46,14 @@ const ACTIONS = [
   { id: 'settings', label: 'Pro Settings' }
 ];
 
+const getTimeOfDay = (date: Date) => {
+  const hour = date.getHours();
+  if (hour >= 5 && hour < 12) return 'Morning with soft sunrise light';
+  if (hour >= 12 && hour < 17) return 'Bright afternoon with clear sky';
+  if (hour >= 17 && hour < 20) return 'Beautiful golden hour sunset';
+  return 'Dark night sky with subtle stars';
+};
+
 export default function App() {
   const [time, setTime] = useState(new Date());
   const [activeOverlay, setActiveOverlay] = useState<'none' | 'notifications' | 'app_drawer' | 'settings'>('none');
@@ -55,6 +64,11 @@ export default function App() {
   const [iconAnim, setIconAnim] = useState('scale');
   const [clockStyle, setClockStyle] = useState('minimal');
   const [appFont, setAppFont] = useState('font-inter');
+
+  // AI Wallpaper State
+  const [useAiWallpaper, setUseAiWallpaper] = useState(false);
+  const [aiWallpaper, setAiWallpaper] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const [gestures, setGestures] = useState({
     swipeUp: 'app_drawer',
@@ -70,6 +84,24 @@ export default function App() {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // AI Wallpaper Generation Logic
+  useEffect(() => {
+    if (!useAiWallpaper) return;
+
+    const fetchWallpaper = async () => {
+      setIsGenerating(true);
+      const timeOfDayDesc = getTimeOfDay(time);
+      const url = await generateWallpaper(timeOfDayDesc);
+      if (url) setAiWallpaper(url);
+      setIsGenerating(false);
+    };
+
+    // Only fetch if we don't have one, or if we want to force refresh (could add a button for that)
+    if (!aiWallpaper) {
+      fetchWallpaper();
+    }
+  }, [useAiWallpaper]);
 
   const formatTime = (date: Date) => {
     return date.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
@@ -160,8 +192,16 @@ export default function App() {
   };
 
   return (
-    <div className={`relative w-full h-[100dvh] bg-[var(--bg-color)] overflow-hidden flex flex-col transition-colors duration-500 ${theme} ${appFont}`}>
-      <div className="absolute inset-0 aura-gradient opacity-50 pointer-events-none" />
+    <div 
+      className={`relative w-full h-[100dvh] bg-[var(--bg-color)] overflow-hidden flex flex-col transition-colors duration-500 ${theme} ${appFont}`}
+      style={useAiWallpaper && aiWallpaper ? {
+        backgroundImage: `url(${aiWallpaper})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      } : {}}
+    >
+      {!useAiWallpaper && <div className="absolute inset-0 aura-gradient opacity-50 pointer-events-none" />}
+      {useAiWallpaper && <div className="absolute inset-0 bg-black/30 pointer-events-none" />} {/* Overlay for readability */}
       
       {/* Status Bar */}
         <div className="h-12 px-8 flex items-center justify-between text-[11px] font-medium text-[var(--text-color)] opacity-80 z-40 bg-gradient-to-b from-black/50 to-transparent pointer-events-none">
@@ -357,6 +397,40 @@ export default function App() {
                 <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-6">
                   {settingsTab === 'appearance' ? (
                     <>
+                      {/* AI Wallpaper */}
+                      <div className="flex flex-col gap-3">
+                        <label className="text-xs text-[var(--text-muted)] flex items-center gap-2 uppercase tracking-widest font-bold">
+                          <ImagePlus size={14} className="text-[var(--accent)]" /> AI Dynamic Wallpaper
+                        </label>
+                        <div className="glass rounded-xl p-4 flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-medium text-[var(--text-color)]">Time-based Wallpaper</p>
+                            <p className="text-[10px] text-[var(--text-muted)] mt-1 max-w-[200px]">
+                              Uses AI to generate a beautiful background based on the current time of day.
+                            </p>
+                          </div>
+                          <button 
+                            onClick={() => {
+                              setUseAiWallpaper(!useAiWallpaper);
+                              if (!useAiWallpaper && !aiWallpaper) {
+                                setIsGenerating(true);
+                              }
+                            }}
+                            className={`relative w-12 h-6 rounded-full transition-colors ${useAiWallpaper ? 'bg-[var(--accent)]' : 'bg-[var(--glass-border)]'}`}
+                          >
+                            <motion.div 
+                              animate={{ x: useAiWallpaper ? 24 : 2 }}
+                              className="absolute top-1 bottom-1 w-4 bg-white rounded-full shadow-md"
+                            />
+                          </button>
+                        </div>
+                        {isGenerating && (
+                          <p className="text-[10px] text-[var(--accent)] animate-pulse">
+                            ✨ Generating your wallpaper...
+                          </p>
+                        )}
+                      </div>
+
                       {/* Themes */}
                       <div className="flex flex-col gap-3">
                         <label className="text-xs text-[var(--text-muted)] flex items-center gap-2 uppercase tracking-widest font-bold">
@@ -375,8 +449,11 @@ export default function App() {
                           ].map(t => (
                             <button 
                               key={t.id}
-                              onClick={() => setTheme(t.id)}
-                              className={`p-3 rounded-xl text-xs font-medium transition-all border ${theme === t.id ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]' : 'border-[var(--glass-border)] bg-[var(--glass-bg)] text-[var(--text-color)]'}`}
+                              onClick={() => {
+                                setTheme(t.id);
+                                setUseAiWallpaper(false); // Disable AI wallpaper when theme is manually selected
+                              }}
+                              className={`p-3 rounded-xl text-xs font-medium transition-all border ${theme === t.id && !useAiWallpaper ? 'border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]' : 'border-[var(--glass-border)] bg-[var(--glass-bg)] text-[var(--text-color)]'}`}
                             >
                               {t.name}
                             </button>
