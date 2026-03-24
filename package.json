@@ -1,5 +1,6 @@
 {
-  "name": "aura-launcher",
+  "name": "aurora-launcher",
+  "description": "Aurora Launcher - A minimalist and aesthetic mobile-style launcher for the web.",
   "private": true,
   "version": "0.0.0",
   "type": "module",
